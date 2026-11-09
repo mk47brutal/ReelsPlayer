@@ -1,0 +1,48 @@
+name: Build and Release ReelPlay (Windows)
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  windows-installer:
+    name: Build Windows installer
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build and publish ReelPlay
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: v__VERSION__
+          releaseName: "ReelPlay v__VERSION__"
+          releaseBody: |
+            ## ReelPlay for Windows
+
+            Download the Windows NSIS installer from the Assets section below.
+
+            1. Download the `.exe` installer.
+            2. Run it and follow the setup wizard.
+          releaseDraft: false
+          prerelease: false
+          args: --bundles nsis
