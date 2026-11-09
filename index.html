@@ -1,0 +1,151 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ReelPlay</title>
+  <style>
+    * { box-sizing: border-box; -webkit-user-select: none; user-select: none; }
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #000; color: #fff; font-family: "Segoe UI", system-ui, sans-serif; }
+    button { font-family: inherit; color: inherit; border: 0; background: none; cursor: pointer; }
+    input[type=range] { accent-color: #fe2c55; cursor: pointer; }
+
+    #stage { position: fixed; inset: 0; background: #000; overflow: hidden; }
+    #stage.idle { cursor: none; }
+    #vwrap { position: absolute; inset: 0; touch-action: none; }
+    #v { width: 100%; height: 100%; object-fit: contain; background: #000; display: block; }
+    @keyframes inNext { from { transform: translateY(60%); opacity: 0; } to { transform: none; opacity: 1; } }
+    @keyframes inPrev { from { transform: translateY(-60%); opacity: 0; } to { transform: none; opacity: 1; } }
+    #vwrap.in-next { animation: inNext .28s ease-out; }
+    #vwrap.in-prev { animation: inPrev .28s ease-out; }
+
+    #empty { position: absolute; inset: 0; display: none; flex-direction: column; align-items: center; justify-content: center; gap: 16px; background: #0f0f14; text-align: center; padding: 24px; z-index: 5; }
+    #empty.show { display: flex; }
+    #emptyText { font-size: 18px; color: #bbb; max-width: 420px; }
+    .btn { background: #fe2c55; padding: 11px 20px; border-radius: 8px; font-size: 15px; font-weight: 600; }
+    .btn:hover { background: #ff4d70; }
+    .btn.ghost { background: #26262f; font-weight: 500; }
+    .btn.ghost:hover { background: #32323e; }
+
+    #heartpop { position: absolute; left: 50%; top: 50%; font-size: 110px; color: #fe2c55; transform: translate(-50%, -50%) scale(0); opacity: 0; pointer-events: none; z-index: 6; text-shadow: 0 4px 24px rgba(0,0,0,.5); }
+    #heartpop.go { animation: pop .7s ease-out; }
+    @keyframes pop { 0% { transform: translate(-50%,-50%) scale(.3); opacity: 0; } 25% { transform: translate(-50%,-50%) scale(1.15); opacity: 1; } 100% { transform: translate(-50%,-50%) scale(1); opacity: 0; } }
+
+    #toast { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); background: rgba(20,20,26,.92); padding: 9px 16px; border-radius: 20px; font-size: 13px; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 30; max-width: 80%; text-align: center; }
+    #toast.show { opacity: 1; }
+
+    #rail { position: absolute; right: 18px; bottom: 130px; display: flex; flex-direction: column; gap: 16px; z-index: 10; }
+    .rbtn { width: 56px; display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 26px; padding: 8px 0; border-radius: 14px; background: rgba(0,0,0,.35); transition: transform .1s, background .15s; }
+    .rbtn small { font-size: 10px; opacity: .85; letter-spacing: .3px; }
+    .rbtn:hover { background: rgba(255,255,255,.14); }
+    .rbtn:active { transform: scale(.92); }
+    .rbtn.on { color: #fe2c55; }
+
+    #info { position: absolute; left: 22px; right: 100px; bottom: 96px; z-index: 10; pointer-events: none; text-shadow: 0 1px 6px rgba(0,0,0,.8); }
+    #vtitle { font-size: 17px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    #vsub { font-size: 13px; opacity: .8; margin-top: 4px; }
+
+    #bar { position: absolute; left: 0; right: 0; bottom: 0; padding: 40px 20px 14px; background: linear-gradient(transparent, rgba(0,0,0,.75)); z-index: 10; transition: opacity .25s; }
+    #stage.idle #bar, #stage.idle #rail, #stage.idle #info { opacity: 0; }
+    #seek { width: 100%; display: block; margin: 0 0 6px; }
+    #ctrl { display: flex; align-items: center; gap: 14px; }
+    .cbtn { font-size: 22px; width: 38px; height: 38px; border-radius: 50%; }
+    .cbtn:hover { background: rgba(255,255,255,.15); }
+    #time { font-size: 13px; opacity: .9; min-width: 90px; }
+    #spacer { flex: 1; }
+    #vol { width: 90px; }
+
+    #scrim { position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 19; display: none; }
+    #scrim.show { display: block; }
+    #drawer { position: fixed; top: 0; bottom: 0; left: 0; width: 360px; max-width: 92vw; background: #14141b; z-index: 20; transform: translateX(-100%); transition: transform .25s ease; display: flex; flex-direction: column; border-right: 1px solid #262630; }
+    #drawer.open { transform: none; }
+    .dsec { padding: 12px 14px; border-bottom: 1px solid #22222b; }
+    .dhead { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+    .dhead h3 { margin: 0; font-size: 15px; }
+    .frow { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; color: #9a9aa8; padding: 3px 0; }
+    .frow span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .frow a { color: #ff5c7a; cursor: pointer; }
+    .tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+    .tab { background: #22222b; padding: 6px 11px; border-radius: 16px; font-size: 12px; }
+    .tab:hover { background: #2d2d38; }
+    .tab.active { background: #fe2c55; }
+    .toggles { display: flex; gap: 8px; flex-wrap: wrap; }
+    #dlist { flex: 1; overflow-y: auto; }
+    .item { display: flex; align-items: center; gap: 10px; padding: 9px 14px; cursor: pointer; border-bottom: 1px solid #1b1b23; }
+    .item:hover { background: #1d1d27; }
+    .item.active { background: #2a2033; }
+    .item .meta { flex: 1; min-width: 0; }
+    .item .nm { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .item .fd { font-size: 11px; color: #8a8a98; margin-top: 2px; }
+    .item .pb { height: 3px; background: #2a2a35; border-radius: 2px; margin-top: 5px; overflow: hidden; }
+    .item .pb i { display: block; height: 100%; background: #fe2c55; }
+    .item .hrt { font-size: 16px; color: #fe2c55; }
+    .keys { font-size: 11px; color: #777; line-height: 1.6; }
+  </style>
+</head>
+<body>
+  <div id="stage">
+    <div id="vwrap"><video id="v" playsinline></video></div>
+
+    <div id="empty">
+      <div id="emptyText"></div>
+      <button class="btn" id="emptyAdd">+ Add folder</button>
+    </div>
+
+    <div id="heartpop">&#9829;</div>
+    <div id="toast"></div>
+
+    <div id="rail">
+      <button class="rbtn" id="likeBtn" title="Like (L)"><span id="likeIcon">&#9825;</span><small>Like</small></button>
+      <button class="rbtn" id="randBtn" title="Random mode (R)"><span>&#128256;</span><small>Random</small></button>
+      <button class="rbtn" id="autoBtn" title="Auto-next when a video ends"><span>&#9197;</span><small>Auto-next</small></button>
+      <button class="rbtn" id="libBtn" title="Library (B)"><span>&#9776;</span><small>Library</small></button>
+    </div>
+
+    <div id="info">
+      <div id="vtitle">ReelPlay</div>
+      <div id="vsub"></div>
+    </div>
+
+    <div id="bar">
+      <input type="range" id="seek" min="0" max="1000" value="0" />
+      <div id="ctrl">
+        <button class="cbtn" id="playBtn" title="Play / Pause (Space)">&#9654;</button>
+        <span id="time">0:00 / 0:00</span>
+        <span id="spacer"></span>
+        <button class="cbtn" id="muteBtn" title="Mute (M)">&#128266;</button>
+        <input type="range" id="vol" min="0" max="100" value="100" />
+        <button class="cbtn" id="fsBtn" title="Fullscreen (F)">&#9974;</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="scrim"></div>
+  <aside id="drawer">
+    <div class="dsec">
+      <div class="dhead"><h3>Library</h3><button class="btn ghost" id="closeDrawer">Close</button></div>
+      <button class="btn" id="addBtn">+ Add folder</button>
+      <button class="btn ghost" id="rescanBtn">Rescan</button>
+      <div id="folders" style="margin-top:10px"></div>
+    </div>
+    <div class="dsec">
+      <div class="tabs" id="tabs"></div>
+    </div>
+    <div class="dsec">
+      <div class="toggles">
+        <button class="btn ghost" id="tgRandom">Random: OFF</button>
+        <button class="btn ghost" id="tgAuto">Auto-next: OFF</button>
+        <button class="btn ghost" id="clearHist">Clear history</button>
+      </div>
+      <div class="keys" style="margin-top:10px">
+        &#8593;/&#8595; or K/J or scroll: previous / next &nbsp;|&nbsp; Space: play/pause<br>
+        &#8592;/&#8594;: seek 5s &nbsp;|&nbsp; L or double-click: like &nbsp;|&nbsp; M: mute<br>
+        R: random &nbsp;|&nbsp; F: fullscreen &nbsp;|&nbsp; B: library &nbsp;|&nbsp; Esc: close
+      </div>
+    </div>
+    <div id="dlist"></div>
+  </aside>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
